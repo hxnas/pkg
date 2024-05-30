@@ -1,7 +1,7 @@
 package ini
 
 import (
-	"github.com/cnk3x/pkg/config"
+	"github.com/hxnas/pkg/config"
 	"gopkg.in/ini.v1"
 )
 

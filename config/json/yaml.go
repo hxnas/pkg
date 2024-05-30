@@ -3,7 +3,7 @@ package json
 import (
 	"encoding/json"
 
-	"github.com/cnk3x/pkg/config"
+	"github.com/hxnas/pkg/config"
 )
 
 func Unmarshal(v any) config.ReadFunc {

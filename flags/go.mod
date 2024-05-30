@@ -1,4 +1,4 @@
-module github.com/cnk3x/pkg/flags
+module github.com/hxnas/pkg/flags
 
 go 1.20
 

@@ -1,7 +1,7 @@
-module github.com/cnk3x/pkg/config/json
+module github.com/hxnas/pkg/config/json
 
 go 1.22.3
 
-replace github.com/cnk3x/pkg/config => ../
+replace github.com/hxnas/pkg/config => ../
 
-require github.com/cnk3x/pkg/config v0.0.0-00010101000000-000000000000
+require github.com/hxnas/pkg/config v0.0.0-00010101000000-000000000000
