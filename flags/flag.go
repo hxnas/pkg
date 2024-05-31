@@ -68,6 +68,7 @@ func ParseFlags(set *FlagSet, args []string) (err error) {
 	}
 
 	if err = set.Parse(args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 
@@ -84,7 +85,6 @@ func ParseFlags(set *FlagSet, args []string) (err error) {
 
 func Parse() {
 	if err := ParseFlags(Default(), os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
