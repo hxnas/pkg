@@ -6,6 +6,7 @@ import (
 	"strconv"
 )
 
+// Itoa converts a number or bool to string
 func Itoa[T Number | ~bool](in T) string {
 	var z T
 	if in == z {
