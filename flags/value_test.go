@@ -8,8 +8,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/spf13/pflag"
 )
 
 var FmtPrintln = func(s string) { fmt.Println("  --" + s) }
@@ -60,16 +58,16 @@ func TestFlag(t *testing.T) {
 
 	cfg.Durs = []time.Duration{1 * time.Second, 1 * time.Hour}
 
-	StructBind(&cfg)
+	if err := StructBindE(&cfg); err != nil {
+		t.Fatal(err)
+	}
+
 	Parse()
 
 	StructPrint(cfg, FmtPrintln)
-
 	args := StructToArgs(cfg)
 
 	fmt.Printf("args:  \"%s\"\n", strings.Join(args, `", "`))
-
-	pflag.Usage()
 }
 
 const FMT = "| %-15s | %-17s | %-5s | %-5s | %-5s | %-5s | %-5s | %-5s |"

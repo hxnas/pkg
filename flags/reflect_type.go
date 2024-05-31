@@ -31,7 +31,7 @@ func rType(t reflect.Type, noExtend ...bool) string {
 // 判断类型是否基础类型: int*, uint*, float*, string, bool
 func isBasic(t reflect.Type) bool { return isBasicKind(t.Kind()) }
 
-func isKnown(t reflect.Type) bool { return HasExtend(t) || isBasic(t) }
+func isKnown(t reflect.Type) bool { return IsExtend(t) || isBasic(t) }
 
 func isAllow(in reflect.Type) bool {
 	var checkTypeInternal func(t reflect.Type, p, s bool) bool

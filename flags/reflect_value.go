@@ -80,7 +80,7 @@ func rSets(v reflect.Value, s string, reset ...bool) (err error) {
 
 func rSetSs(v reflect.Value, s string, reset bool) (err error) {
 	if !v.IsValid() || v.Kind() != reflect.Slice {
-		return invalid("rAppend")
+		return invalid("rSetSs")
 	}
 
 	if v.IsNil() {

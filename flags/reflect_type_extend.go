@@ -4,32 +4,32 @@ import (
 	"reflect"
 )
 
-var extends = ExtendMap{}
+var extends = extendMap{}
 
-type ExtendMap map[reflect.Type]*ExtendType
+type extendMap map[reflect.Type]*extendType
 
-type ExtendType struct {
+type extendType struct {
 	typ     reflect.Type
 	setFunc func(reflect.Value, string) error
 	getFunc func(reflect.Value) string
 	newFunc func() reflect.Value
 }
 
-func (te *ExtendType) New() (v reflect.Value) {
+func (te *extendType) New() (v reflect.Value) {
 	if te != nil && te.newFunc != nil {
 		v = te.newFunc()
 	}
 	return
 }
 
-func (te *ExtendType) Get(v reflect.Value) (s string) {
+func (te *extendType) Get(v reflect.Value) (s string) {
 	if te != nil && te.getFunc != nil {
 		s = te.getFunc(v)
 	}
 	return
 }
 
-func (te *ExtendType) Set(v reflect.Value, s string) (err error) {
+func (te *extendType) Set(v reflect.Value, s string) (err error) {
 	if te != nil && te.setFunc != nil {
 		if err = te.setFunc(v, s); err != nil {
 			return
@@ -38,7 +38,7 @@ func (te *ExtendType) Set(v reflect.Value, s string) (err error) {
 	return
 }
 
-func (te *ExtendType) Type() string { return rType(te.typ, true) }
+func (te *extendType) Type() string { return rType(te.typ, true) }
 
 func Extend[T any](parse func(string) (T, error), format func(T) string) {
 	setFunc := func(v reflect.Value, s string) (err error) {
@@ -61,22 +61,22 @@ func Extend[T any](parse func(string) (T, error), format func(T) string) {
 	}
 
 	var x T
-	it := &ExtendType{typ: reflect.TypeOf(x), setFunc: setFunc, getFunc: getFunc}
+	it := &extendType{typ: reflect.TypeOf(x), setFunc: setFunc, getFunc: getFunc}
 	if extends == nil {
-		extends = ExtendMap{it.typ: it}
+		extends = extendMap{it.typ: it}
 	} else {
 		extends[it.typ] = it
 	}
 }
 
-func GetExtend(t reflect.Type) *ExtendType {
+func GetExtend(t reflect.Type) *extendType {
 	if extends != nil {
 		return extends[t]
 	}
 	return nil
 }
 
-func HasExtend(t reflect.Type) bool {
+func IsExtend(t reflect.Type) bool {
 	if extends != nil {
 		_, found := extends[t]
 		return found

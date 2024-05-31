@@ -8,7 +8,7 @@ import (
 	"unicode"
 )
 
-type FlagField struct {
+type flagField struct {
 	Field           reflect.StructField
 	Name            string
 	Shorthand       string
@@ -22,7 +22,7 @@ type FlagField struct {
 	Referer reflect.Value
 }
 
-func (f *FlagField) UpdateFromEnv() {
+func (f *flagField) UpdateFromEnv() {
 	printDeprecatedEnvKey := func(keys []string, ck, ak string, deprecated bool, i int) {
 		if deprecated {
 			if ak == "" && i < len(keys)-1 {
@@ -65,7 +65,7 @@ func (f *FlagField) UpdateFromEnv() {
 	}
 }
 
-func ParseStruct(src any, checkSetable ...bool) (items []*FlagField, err error) {
+func getFields(src any, checkSetable ...bool) (items []*flagField, err error) {
 	r := rVal(src)
 
 	if len(checkSetable) > 0 && checkSetable[0] && !r.CanSet() {
@@ -81,7 +81,7 @@ func ParseStruct(src any, checkSetable ...bool) (items []*FlagField, err error) 
 		}
 
 		if f.Anonymous {
-			children, e := ParseStruct(r.Field(i), checkSetable...)
+			children, e := getFields(r.Field(i), checkSetable...)
 			if e != nil {
 				err = e
 				return
@@ -102,7 +102,7 @@ func ParseStruct(src any, checkSetable ...bool) (items []*FlagField, err error) 
 	return
 }
 
-func parseField(r reflect.Value, f reflect.StructField, i int) (item FlagField, ignored bool) {
+func parseField(r reflect.Value, f reflect.StructField, fieldIndex int) (item flagField, ignored bool) {
 	if flagTag := getTag(f.Tag, _TAG_FLAG); flagTag != "" {
 		if ignored = flagTag == "-"; ignored {
 			return
@@ -149,7 +149,7 @@ func parseField(r reflect.Value, f reflect.StructField, i int) (item FlagField, 
 
 	item.Field = f
 	item.Struct = r
-	item.Referer = r.Field(i)
+	item.Referer = r.Field(fieldIndex)
 	item.Usage = getTag(f.Tag, _TAG_USAGE)
 	item.Value = newValue(item.Referer, f.Type)
 	return

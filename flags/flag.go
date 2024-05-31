@@ -8,11 +8,7 @@ import (
 	"github.com/spf13/pflag"
 )
 
-type (
-	FlagSet = pflag.FlagSet
-	Flag    = pflag.Flag
-	Value   = pflag.Value
-)
+type FlagSet = pflag.FlagSet
 
 var Default = func() *FlagSet { return pflag.CommandLine }
 
@@ -28,50 +24,49 @@ func Version(updateVer ...string) string {
 	return version
 }
 
-func name() string { return filepath.Base(os.Args[0]) }
-
-func ParseFlags(set *FlagSet, args []string) (err error) {
+func ParseFlag(flag *FlagSet, args []string) (err error) {
 	name, out := name(), os.Stderr
 
 	pflag.ErrHelp = fmt.Errorf("use %s [...OPTIONS] to start", name)
 
-	set.Init(name, pflag.ContinueOnError)
-	set.SetOutput(out)
-	set.SortFlags = false
+	flag.Init(name, pflag.ContinueOnError)
+	flag.SetOutput(out)
+	flag.SortFlags = false
 
-	set.Usage = func() {
+	flag.Usage = func() {
 		fmt.Fprintf(out, "%s", name)
 		if version != "" {
 			fmt.Fprintf(out, " -- version %s", version)
 		}
 		fmt.Fprintf(out, "\n\n")
 		fmt.Fprintf(out, "USAGE:\n")
-		fmt.Fprintf(out, "      %s [...OPTIONS]\n\n", name)
+		fmt.Fprintf(out, "  %s [...OPTIONS]\n\n", name)
 		fmt.Fprintf(out, "OPTIONS:\n")
-		fmt.Fprintln(out, set.FlagUsagesWrapped(0))
+		fmt.Fprintln(out, flag.FlagUsagesWrapped(0))
 	}
 
-	if set == Default() {
-		pflag.Usage = set.Usage
+	if flag == Default() {
+		pflag.Usage = flag.Usage
 	}
 
-	if version != "" && set.Lookup("version") == nil {
+	const versionFlag = "version"
+
+	if version != "" && flag.Lookup(versionFlag) == nil {
 		var shorthand string
-		if set.Lookup("v") == nil {
+		if flag.Lookup("v") == nil {
 			shorthand = "v"
 		}
-		if shorthand == "" && set.Lookup("V") == nil {
+		if shorthand == "" && flag.Lookup("V") == nil {
 			shorthand = "V"
 		}
-		set.BoolP("version", shorthand, false, "显示版本号")
+		flag.BoolP(versionFlag, shorthand, false, "显示版本信息")
 	}
 
-	if err = set.Parse(args); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	if err = flag.Parse(args); err != nil {
 		return
 	}
 
-	if ver, _ := set.GetBool("version"); ver {
+	if ver, _ := flag.GetBool(versionFlag); ver {
 		fmt.Fprintf(out, "%s", name)
 		if version != "" {
 			fmt.Fprintf(out, " -- version %s", version)
@@ -83,12 +78,15 @@ func ParseFlags(set *FlagSet, args []string) (err error) {
 }
 
 func Parse() {
-	if err := ParseFlags(Default(), os.Args[1:]); err != nil {
+	if err := ParseFlag(Default(), os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func flagSet(flags []*FlagSet) *FlagSet {
+func name() string { return filepath.Base(os.Args[0]) }
+
+func flagSet(flags ...*FlagSet) *FlagSet {
 	for _, f := range flags {
 		if f != nil {
 			return f
