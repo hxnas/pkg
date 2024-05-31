@@ -49,7 +49,6 @@ func ParseFlags(set *FlagSet, args []string) (err error) {
 		fmt.Fprintf(out, "      %s [...OPTIONS]\n\n", name)
 		fmt.Fprintf(out, "OPTIONS:\n")
 		fmt.Fprintln(out, set.FlagUsagesWrapped(0))
-		fmt.Fprintln(out)
 	}
 
 	if set == Default() {
