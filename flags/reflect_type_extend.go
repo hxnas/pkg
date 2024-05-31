@@ -6,39 +6,11 @@ import (
 
 var extends = extendMap{}
 
-type extendMap map[reflect.Type]*extendType
-
-type extendType struct {
-	typ     reflect.Type
-	setFunc func(reflect.Value, string) error
-	getFunc func(reflect.Value) string
-	newFunc func() reflect.Value
+type ExtendType interface {
+	Get(v reflect.Value) (s string)
+	Set(v reflect.Value, s string) (err error)
+	Type() string
 }
-
-func (te *extendType) New() (v reflect.Value) {
-	if te != nil && te.newFunc != nil {
-		v = te.newFunc()
-	}
-	return
-}
-
-func (te *extendType) Get(v reflect.Value) (s string) {
-	if te != nil && te.getFunc != nil {
-		s = te.getFunc(v)
-	}
-	return
-}
-
-func (te *extendType) Set(v reflect.Value, s string) (err error) {
-	if te != nil && te.setFunc != nil {
-		if err = te.setFunc(v, s); err != nil {
-			return
-		}
-	}
-	return
-}
-
-func (te *extendType) Type() string { return rType(te.typ, true) }
 
 func Extend[T any](parse func(string) (T, error), format func(T) string) {
 	setFunc := func(v reflect.Value, s string) (err error) {
@@ -61,25 +33,39 @@ func Extend[T any](parse func(string) (T, error), format func(T) string) {
 	}
 
 	var x T
-	it := &extendType{typ: reflect.TypeOf(x), setFunc: setFunc, getFunc: getFunc}
+	st := &simpleType{typ: reflect.TypeOf(x), setFunc: setFunc, getFunc: getFunc}
 	if extends == nil {
-		extends = extendMap{it.typ: it}
+		extends = extendMap{st.typ: st}
 	} else {
-		extends[it.typ] = it
+		extends[st.typ] = st
 	}
 }
 
-func GetExtend(t reflect.Type) *extendType {
-	if extends != nil {
-		return extends[t]
-	}
-	return nil
+func GetExtend(t reflect.Type) ExtendType { return extends[t] }
+func IsExtend(t reflect.Type) (yes bool)  { _, yes = extends[t]; return }
+
+type extendMap map[reflect.Type]ExtendType
+
+type simpleType struct {
+	typ     reflect.Type
+	setFunc func(reflect.Value, string) error
+	getFunc func(reflect.Value) string
 }
 
-func IsExtend(t reflect.Type) bool {
-	if extends != nil {
-		_, found := extends[t]
-		return found
+func (te *simpleType) Get(v reflect.Value) (s string) {
+	if te != nil && te.getFunc != nil {
+		s = te.getFunc(v)
 	}
-	return false
+	return
 }
+
+func (te *simpleType) Set(v reflect.Value, s string) (err error) {
+	if te != nil && te.setFunc != nil {
+		if err = te.setFunc(v, s); err != nil {
+			return
+		}
+	}
+	return
+}
+
+func (te *simpleType) Type() string { return rType(te.typ, true) }
