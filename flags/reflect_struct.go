@@ -66,7 +66,7 @@ func (f *flagField) UpdateFromEnv() {
 }
 
 func getFields(src any, checkSetable ...bool) (items []*flagField, err error) {
-	r := rVal(src)
+	r := rVal(src, true)
 
 	if len(checkSetable) > 0 && checkSetable[0] && !r.CanSet() {
 		err = fmt.Errorf("can't set %T", src)
