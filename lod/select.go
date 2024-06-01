@@ -20,3 +20,26 @@ func Select[T comparable](vs ...T) (out T) {
 	}
 	return
 }
+
+func Firsts[T any](vs ...T) T { return First(vs) }
+
+func First[T any](vs []T) (out T) {
+	if len(vs) > 0 {
+		out = vs[0]
+	}
+	return
+}
+
+func Last[T any](vs []T) (out T) {
+	if l := len(vs); l > 0 {
+		out = vs[l-1]
+	}
+	return
+}
+
+func At[T any](vs []T, i int) (out T) {
+	if 0 <= i && i < len(vs) {
+		out = vs[i]
+	}
+	return
+}

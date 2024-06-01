@@ -20,11 +20,14 @@ func MapIndex[S any, R any](s []S, f func(S, int) R) []R {
 	return r
 }
 
+// Flatten returns a new slice concatenating the passed in slices.
+func Flatten[T any](s [][]T) []T { return Concat(s...) }
+
 // Concat returns a new slice concatenating the passed in slices.
 func Concat[S ~[]E, E any](ss ...S) S { return slices.Concat(ss...) }
 
 // Contains reports whether v is present in s.
-func Contains[S ~[]E, E comparable](s S, v E) bool { return slices.Contains(s, v) }
+func Contains[E comparable](s []E, v E) bool { return slices.Contains(s, v) }
 
 // Delete removes the elements s[i:j] from s, returning the modified slice.
 // Delete panics if j > len(s) or s[i:j] is not a valid slice of s.
