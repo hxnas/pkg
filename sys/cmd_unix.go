@@ -4,6 +4,9 @@
 package sys
 
 import (
+	"context"
+	"log/slog"
+	"os"
 	"os/exec"
 	"os/user"
 	"strconv"
@@ -99,3 +102,37 @@ const (
 	SIGKILL = syscall.SIGKILL
 	SIGINT  = syscall.SIGINT
 )
+
+const keyTag = "GO_CMD_FORK_TAG"
+
+func IsForkTag(tag string) bool {
+	return os.Getenv(keyTag) == tag
+}
+
+func Fork(args []string, env []string, tag string) Caller {
+	return func(ctx context.Context) (err error) {
+		var executable string
+
+		if executable, err = os.Executable(); err != nil {
+			slog.WarnContext(ctx, tag+" run", "err", err)
+			return
+		}
+
+		cmd := exec.CommandContext(ctx, executable, args...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Env = NewEnv().Append(env...).Set(keyTag, tag).Environ()
+
+		SetNewNS(cmd)
+		SetPdeathsig(cmd, SIGINT)
+
+		slog.DebugContext(ctx, tag+" run", "command", cmd.String())
+		if err = cmd.Start(); err != nil {
+			slog.WarnContext(ctx, tag+" run", "err", err)
+		} else {
+			slog.DebugContext(ctx, tag+" run", "pid", cmd.Process.Pid)
+		}
+
+		return cmd.Wait()
+	}
+}
