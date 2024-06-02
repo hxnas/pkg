@@ -136,6 +136,23 @@ func Fork(args []string, env []string, tag string) Caller {
 			slog.DebugContext(ctx, tag+" run", "pid", cmd.Process.Pid)
 		}
 
-		return cmd.Wait()
+		if err = cmd.Wait(); err != nil {
+			if IsSignaled(err) {
+				return nil
+			}
+			err = lod.Errf("%w", err)
+		}
+
+		return
 	}
+}
+
+func IsSignaled(err error) bool {
+	var ee *exec.ExitError
+	if lod.ErrAs(err, &ee) {
+		if status, ok := ee.ProcessState.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+			return status.Signaled()
+		}
+	}
+	return false
 }
