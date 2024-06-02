@@ -299,7 +299,7 @@ func (h *handler) appendSource(buf *buffer, src *slog.Source) {
 	}
 
 	ln := strconv.Itoa(src.Line)
-	if l := len(file); l < 3 {
+	if l := len(ln); l < 3 {
 		ln = ln + strings.Repeat(" ", 3-l)
 	}
 
