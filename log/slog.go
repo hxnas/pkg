@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"unicode"
@@ -290,10 +291,22 @@ func appendLevelDelta(buf *buffer, delta slog.Level) {
 func (h *handler) appendSource(buf *buffer, src *slog.Source) {
 	dir, file := filepath.Split(src.File)
 
+	file = filepath.Join(filepath.Base(dir), file)
+	if l := len(file); l > 20 {
+		file = "..." + file[len(file)-17:]
+	} else if l < 20 {
+		file = strings.Repeat(" ", 20-l) + file
+	}
+
+	ln := strconv.Itoa(src.Line)
+	if l := len(file); l < 3 {
+		ln = ln + strings.Repeat(" ", 3-l)
+	}
+
 	buf.WriteStringIf(!h.noColor, ansiFaint)
-	buf.WriteString(filepath.Join(filepath.Base(dir), file))
+	buf.WriteString(file)
 	buf.WriteByte(':')
-	buf.WriteString(strconv.Itoa(src.Line))
+	buf.WriteString(ln)
 	buf.WriteStringIf(!h.noColor, ansiReset)
 }
 
