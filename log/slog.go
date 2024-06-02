@@ -292,7 +292,7 @@ func (h *handler) appendSource(buf *buffer, src *slog.Source) {
 	dir, file := filepath.Split(src.File)
 	dir = filepath.Base(dir)
 
-	const max = 20
+	const max = 15
 
 	filename := filepath.Join(filepath.Base(dir), file)
 	if l := len(filename); l > max {
