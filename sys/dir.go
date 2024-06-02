@@ -15,7 +15,7 @@ import (
 
 func Mkdir(path string, perm fs.FileMode, recursives ...bool) Caller {
 	return func(ctx context.Context) (err error) {
-		recursive := lod.Select(recursives...)
+		recursive := lod.First(recursives)
 		if recursive {
 			err = os.MkdirAll(path, perm)
 		} else {

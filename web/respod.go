@@ -19,7 +19,7 @@ func Blob[T ~[]byte | ~string](body T, contentType string, status int) http.Hand
 
 func Redirect(to string, permanent ...bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, to, lod.Iif(lod.Select(permanent...), http.StatusPermanentRedirect, http.StatusTemporaryRedirect))
+		http.Redirect(w, r, to, lod.Iif(lod.First(permanent), http.StatusPermanentRedirect, http.StatusTemporaryRedirect))
 	}
 }
 

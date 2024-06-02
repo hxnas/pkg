@@ -16,11 +16,15 @@ import (
 
 func Mount(device, target, mType, options string, force ...bool) Caller {
 	return func(ctx context.Context) (err error) {
-		if !lod.Select(force...) {
+		if !lod.First(force) {
 			var mounted bool
 			if mounted, err = mountinfo.Mounted(target); err != nil || mounted {
 				if err != nil {
-					err = lod.Errf("%w", err)
+					if os.IsNotExist(err) {
+						err = nil
+					} else {
+						err = lod.Errf("%w", err)
+					}
 				}
 				return
 			}
@@ -34,15 +38,15 @@ func Mount(device, target, mType, options string, force ...bool) Caller {
 		if err != nil {
 			err = lod.Errf("%w", err)
 		}
-		slog.DebugContext(ctx, "mount", "device", device, "target", target, "type", mType, "options", options, "err", err)
 
+		slog.DebugContext(ctx, "mount", "device", device, "target", target, "type", mType, "options", options, "err", err)
 		return
 	}
 }
 
 func Unmount(target string, recursives ...bool) Caller {
 	return func(ctx context.Context) (err error) {
-		recursive := lod.Select(recursives...)
+		recursive := lod.First(recursives)
 		if recursive {
 			err = mount.RecursiveUnmount(target)
 		} else {
@@ -58,5 +62,5 @@ func Unmount(target string, recursives ...bool) Caller {
 }
 
 func Bind(srcPath, rootDir string, recursive ...bool) Caller {
-	return Mount(srcPath, filepath.Join(rootDir, srcPath), "none", lod.Iif(lod.Select(recursive...), "rbind", "bind"))
+	return Mount(srcPath, filepath.Join(rootDir, srcPath), "none", lod.Iif(lod.First(recursive), "rbind", "bind"))
 }
