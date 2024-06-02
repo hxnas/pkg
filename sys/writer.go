@@ -1,4 +1,4 @@
-package log
+package sys
 
 import (
 	"bufio"
@@ -7,11 +7,12 @@ import (
 	"log"
 )
 
-func NewWriter(ctx context.Context, handleMessage func(ctx context.Context, msg string)) *Writer {
-	lw := &Writer{}
+func MessageRecive(ctx context.Context, handleMessage func(ctx context.Context, msg string)) io.WriteCloser {
+	lw := &reciver{}
 	lw.ctx, lw.cancel = context.WithCancel(ctx)
 	lw.pr, lw.pw = io.Pipe()
 	lw.done = make(chan struct{})
+	lw.handleMessage = handleMessage
 
 	go func() {
 		defer close(lw.done)
@@ -29,7 +30,7 @@ func NewWriter(ctx context.Context, handleMessage func(ctx context.Context, msg 
 	return lw
 }
 
-type Writer struct {
+type reciver struct {
 	pr            io.ReadCloser
 	pw            io.WriteCloser
 	ctx           context.Context
@@ -38,7 +39,7 @@ type Writer struct {
 	done          chan struct{}
 }
 
-func (lw *Writer) Scan() {
+func (lw *reciver) Scan() {
 	for br := bufio.NewScanner(lw.pr); br.Scan(); {
 		select {
 		case <-lw.ctx.Done():
@@ -49,15 +50,14 @@ func (lw *Writer) Scan() {
 	}
 }
 
-func (lw *Writer) Write(p []byte) (n int, err error) {
-	n, err = lw.pw.Write(p)
-	if err != nil {
+func (lw *reciver) Write(p []byte) (n int, err error) {
+	if n, err = lw.pw.Write(p); err != nil {
 		lw.cancel()
 	}
 	return
 }
 
-func (lw *Writer) Close() (err error) {
+func (lw *reciver) Close() (err error) {
 	if lw.cancel != nil {
 		lw.cancel()
 	}
@@ -65,6 +65,6 @@ func (lw *Writer) Close() (err error) {
 	return
 }
 
-func (lw *Writer) StandardLogger(prefix string) *log.Logger {
+func (lw *reciver) StandardLogger(prefix string) *log.Logger {
 	return log.New(lw, prefix, 0)
 }
