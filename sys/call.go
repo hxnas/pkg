@@ -2,6 +2,7 @@ package sys
 
 import (
 	"context"
+	"log/slog"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -28,4 +29,14 @@ func Call(ctx context.Context, callers ...Caller) (err error) {
 		}
 	}
 	return
+}
+
+// 顺序执行
+func SkipErrCall(ctx context.Context, callers ...Caller) {
+	for _, caller := range callers {
+		if err := caller.Call(ctx); err != nil {
+			slog.WarnContext(ctx, "caller error", "err", err)
+			break
+		}
+	}
 }

@@ -11,6 +11,8 @@ import (
 	"os/user"
 	"strconv"
 	"syscall"
+
+	"github.com/hxnas/pkg/lod"
 )
 
 func SetCredential(c *exec.Cmd, uid, gid uint32) {
@@ -128,6 +130,7 @@ func Fork(args []string, env []string, tag string) Caller {
 
 		slog.DebugContext(ctx, tag+" run", "command", cmd.String())
 		if err = cmd.Start(); err != nil {
+			err = lod.Errf("%w", err)
 			slog.WarnContext(ctx, tag+" run", "err", err)
 		} else {
 			slog.DebugContext(ctx, tag+" run", "pid", cmd.Process.Pid)

@@ -21,6 +21,9 @@ func Mkdir(path string, perm fs.FileMode, recursives ...bool) Caller {
 		} else {
 			err = os.Mkdir(path, perm)
 		}
+		if err != nil {
+			err = lod.Errf("%w", err)
+		}
 		slog.Log(ctx, lod.ErrDebug(err), "mkdir", "path", path, "perm", perm.String(), "recursive", recursive)
 		return
 	}
@@ -30,26 +33,32 @@ func Mkdirs(path string) Caller {
 	return Mkdir(path, 0777, true)
 }
 
-func ReadDirNames(path string, n int) ([]string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
+func ReadDirNames(path string, n int) (files []string, err error) {
+	var f *os.File
+	if f, err = os.Open(path); err != nil {
+		err = lod.Errf("%w", err)
+		return
 	}
 	defer f.Close()
-	dirs, err := f.Readdirnames(n)
-	slices.Sort(dirs)
-	return dirs, err
+	if files, err = f.Readdirnames(n); err != nil {
+		err = lod.Errf("%w", err)
+	}
+	slices.Sort(files)
+	return
 }
 
-func ReadDirs(path string, n int) ([]fs.DirEntry, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
+func ReadDirs(path string, n int) (files []fs.DirEntry, err error) {
+	var f *os.File
+	if f, err = os.Open(path); err != nil {
+		err = lod.Errf("%w", err)
+		return
 	}
 	defer f.Close()
-	dirs, err := f.ReadDir(n)
-	slices.SortFunc(dirs, func(a, b fs.DirEntry) int { return cmp.Compare(a.Name(), b.Name()) })
-	return dirs, err
+	if files, err = f.ReadDir(n); err != nil {
+		err = lod.Errf("%w", err)
+	}
+	slices.SortFunc(files, func(a, b fs.DirEntry) int { return cmp.Compare(a.Name(), b.Name()) })
+	return
 }
 
 func IsSubPath(basepath, targpath string) bool {

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/hxnas/pkg/lod"
 	"github.com/moby/sys/symlink"
 )
 
@@ -28,14 +29,17 @@ func Symlink(srcPath, dstPath string) func(ctx context.Context) (err error) {
 	return func(ctx context.Context) (err error) {
 		slog.DebugContext(ctx, "links", "src", srcPath, "dst", dstPath)
 		if srcPath, err = filepath.Abs(srcPath); err != nil {
+			err = lod.Errf("%w", err)
 			return
 		}
 
 		if dstPath, err = filepath.Abs(dstPath); err != nil {
+			err = lod.Errf("%w", err)
 			return
 		}
 
 		if err = os.MkdirAll(filepath.Dir(dstPath), 0777); err != nil {
+			err = lod.Errf("%w", err)
 			return
 		}
 
@@ -49,10 +53,12 @@ func Symlink(srcPath, dstPath string) func(ctx context.Context) (err error) {
 		}
 
 		if err != nil && !os.IsNotExist(err) {
+			err = lod.Errf("%w", err)
 			return
 		}
 
 		if err = os.Symlink(srcPath, dstPath); err != nil {
+			err = lod.Errf("%w", err)
 			return
 		}
 

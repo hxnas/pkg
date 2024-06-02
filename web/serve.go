@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+
+	"github.com/hxnas/pkg/lod"
 )
 
 type ServeOption struct {
@@ -53,6 +55,9 @@ func Serve(ctx context.Context, options ServeOption) (port int, err error) {
 		defer onShutDown()
 
 		err := s.ListenAndServe()
+		if err != nil {
+			err = lod.Errf("%w", err)
+		}
 		trySend(errc, err)
 		if err != nil && err != http.ErrServerClosed {
 			slog.ErrorContext(ctx, "web is done!", "err", err)

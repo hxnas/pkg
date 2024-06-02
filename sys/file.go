@@ -31,32 +31,45 @@ func RandText(n int) (s string) {
 var B32 = base32.NewEncoding("abcdefghijklmnopqrstuvwxyz234567").WithPadding(base32.NoPadding)
 
 // fileWrite 写入文件，存在则跳过
-func FileWrite[T ~string | ~[]byte](path string, data T, perm os.FileMode) Caller {
+func FileWrite[T ~string | ~[]byte](path string, data T, perm os.FileMode, overwrite ...bool) Caller {
 	return func(ctx context.Context) (err error) {
 		if err = Mkdirs(filepath.Dir(path)).Call(ctx); err != nil {
+			err = lod.Errf("%w", err)
 			return
 		}
 
 		err = func() (err error) {
 			var f *os.File
-			if f, err = os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666); err != nil {
+			if lod.First(overwrite) {
+				f, err = os.Create(path)
+			} else {
+				f, err = os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
+			}
+
+			if err != nil {
 				if os.IsExist(err) {
 					slog.WarnContext(ctx, fmt.Sprintf("%s has exist, ignore write", path))
 					return nil
 				}
+				err = lod.Errf("%w", err)
 				return
 			}
 
-			_, err = f.Write([]byte(data))
+			if _, err = f.Write([]byte(data)); err != nil {
+				err = lod.Errf("%w", err)
+			}
 
 			if err == nil && perm > 0 && perm != 0666 {
-				err = f.Chmod(perm)
+				if err = f.Chmod(perm); err != nil {
+					err = lod.Errf("%w", err)
+				}
 			}
 
 			if ce := f.Close(); err == nil {
-				err = ce
+				if err = ce; err != nil {
+					err = lod.Errf("%w", err)
+				}
 			}
-
 			return
 		}()
 
@@ -77,6 +90,7 @@ func FileWriteCopy[T ~string | ~[]byte](writeTo, copyTo string, data T, perm os.
 		}
 
 		if err != nil {
+			err = lod.Errf("%w", err)
 			return
 		}
 

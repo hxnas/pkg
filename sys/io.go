@@ -7,12 +7,15 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/hxnas/pkg/lod"
 )
 
 var buffer32KPool = &sync.Pool{New: func() interface{} { s := make([]byte, 32*1024); return &s }}
 
 func IOWriteFile(ctx context.Context, src io.Reader, dstPath string, perm fs.FileMode) (err error) {
 	if err = os.MkdirAll(filepath.Dir(dstPath), os.ModePerm); err != nil {
+		err = lod.Errf("%w", err)
 		return
 	}
 
@@ -23,6 +26,9 @@ func IOWriteFile(ctx context.Context, src io.Reader, dstPath string, perm fs.Fil
 		}
 		if e := dst.Close(); err == nil {
 			err = e
+		}
+		if err != nil {
+			err = lod.Errf("%w", err)
 		}
 	}
 	return
