@@ -290,24 +290,40 @@ func appendLevelDelta(buf *buffer, delta slog.Level) {
 
 func (h *handler) appendSource(buf *buffer, src *slog.Source) {
 	dir, file := filepath.Split(src.File)
+	dir = filepath.Base(dir)
 
-	file = filepath.Join(filepath.Base(dir), file)
-	if l := len(file); l > 20 {
-		file = "..." + file[len(file)-17:]
-	} else if l < 20 {
-		file = strings.Repeat(" ", 20-l) + file
-	}
+	const max = 20
 
-	ln := strconv.Itoa(src.Line)
-	if l := len(ln); l < 3 {
-		ln = ln + strings.Repeat(" ", 3-l)
+	filename := filepath.Join(filepath.Base(dir), file)
+	if l := len(filename); l > max {
+		filename = leftPad(file, max)
+	} else if l < max {
+		filename = leftPad(filename, max)
 	}
 
 	buf.WriteStringIf(!h.noColor, ansiFaint)
-	buf.WriteString(file)
+	buf.WriteString(filename)
 	buf.WriteByte(':')
-	buf.WriteString(ln)
+	buf.WriteString(rightPad(strconv.Itoa(src.Line), 3))
 	buf.WriteStringIf(!h.noColor, ansiReset)
+}
+
+func leftPad(s string, w int) string {
+	if l := len(s); l > w {
+		s = s[:w]
+	} else {
+		s = strings.Repeat(" ", w-l) + s
+	}
+	return s
+}
+
+func rightPad(s string, w int) string {
+	if l := len(s); l > w {
+		s = s[:w]
+	} else {
+		s = s + strings.Repeat(" ", w-l)
+	}
+	return s
 }
 
 func (h *handler) appendAttr(buf *buffer, attr slog.Attr, groupsPrefix string, groups []string) {
