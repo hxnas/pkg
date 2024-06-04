@@ -207,7 +207,9 @@ func (h *handler) Handle(ctx context.Context, r slog.Record) error {
 
 	// write attributes
 	r.Attrs(func(attr slog.Attr) bool {
-		h.appendAttr(buf, attr, h.groupPrefix, h.groups)
+		if attr.Value.Any() != nil {
+			h.appendAttr(buf, attr, h.groupPrefix, h.groups)
+		}
 		return true
 	})
 
