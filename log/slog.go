@@ -138,6 +138,14 @@ func (h *handler) Handle(ctx context.Context, r slog.Record) error {
 
 	rep := h.replaceAttr
 
+	r.Attrs(func(attr slog.Attr) bool {
+		if attr.Key == slog.TimeKey && attr.Value.Kind() == slog.KindTime {
+			r.Time = attr.Value.Time()
+			return false
+		}
+		return true
+	})
+
 	// write time
 	if !r.Time.IsZero() {
 		val := r.Time.Round(0) // strip monotonic to match Attr behavior
@@ -207,8 +215,10 @@ func (h *handler) Handle(ctx context.Context, r slog.Record) error {
 
 	// write attributes
 	r.Attrs(func(attr slog.Attr) bool {
-		if attr.Value.Any() != nil {
-			h.appendAttr(buf, attr, h.groupPrefix, h.groups)
+		if attr.Key != slog.TimeKey || attr.Value.Kind() != slog.KindTime {
+			if attr.Value.Any() != nil {
+				h.appendAttr(buf, attr, h.groupPrefix, h.groups)
+			}
 		}
 		return true
 	})
