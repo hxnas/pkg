@@ -317,42 +317,9 @@ func (h *handler) appendSource(buf *buffer, src *slog.Source) {
 	filename := filepath.Join(filepath.Base(dir), file)
 
 	buf.WriteStringIf(!h.noColor, ansiFaint)
-	buf.WriteString(filename)
-	buf.WriteByte(':')
-	buf.WriteString(strconv.Itoa(src.Line))
+	*buf = strconv.AppendQuote(*buf, filename+":"+strconv.Itoa(src.Line))
 	buf.WriteStringIf(!h.noColor, ansiReset)
-
-	// const max = 15
-	// filename := filepath.Join(filepath.Base(dir), file)
-	// if l := len(filename); l > max {
-	// 	filename = leftPad(file, max)
-	// } else if l < max {
-	// 	filename = leftPad(filename, max)
-	// }
-	// buf.WriteStringIf(!h.noColor, ansiFaint)
-	// buf.WriteString(filename)
-	// buf.WriteByte(':')
-	// buf.WriteString(rightPad(strconv.Itoa(src.Line), 3))
-	// buf.WriteStringIf(!h.noColor, ansiReset)
 }
-
-// func leftPad(s string, w int) string {
-// 	if l := len(s); l > w {
-// 		s = s[:w]
-// 	} else {
-// 		s = strings.Repeat(" ", w-l) + s
-// 	}
-// 	return s
-// }
-
-// func rightPad(s string, w int) string {
-// 	if l := len(s); l > w {
-// 		s = s[:w]
-// 	} else {
-// 		s = s + strings.Repeat(" ", w-l)
-// 	}
-// 	return s
-// }
 
 func (h *handler) appendAttr(buf *buffer, attr slog.Attr, groupsPrefix string, groups []string) {
 	attr.Value = attr.Value.Resolve()
