@@ -176,19 +176,34 @@ func (h *handler) Handle(ctx context.Context, r slog.Record) error {
 		fs := runtime.CallersFrames([]uintptr{r.PC})
 		f, _ := fs.Next()
 		if f.File != "" {
+
+			dir, file := filepath.Split(f.File)
+			dir = filepath.Base(dir)
+
+			const max = 15
+
+			filename := filepath.Join(filepath.Base(dir), file)
+			if l := len(filename); l > max {
+				filename = leftPad(file, max)
+			} else if l < max {
+				filename = leftPad(filename, max)
+			}
+
 			src := &slog.Source{
 				Function: f.Function,
-				File:     f.File,
+				File:     filename,
 				Line:     f.Line,
 			}
 
-			if rep == nil {
-				h.appendSource(buf, src)
-				buf.WriteByte(' ')
-			} else if a := rep(nil /* groups */, slog.Any(slog.SourceKey, src)); a.Key != "" {
-				h.appendValue(buf, a.Value, false)
-				buf.WriteByte(' ')
-			}
+			r.AddAttrs(slog.Any(slog.SourceKey, src))
+
+			// if rep == nil {
+			// 	h.appendSource(buf, src)
+			// 	buf.WriteByte(' ')
+			// } else if a := rep(nil /* groups */, slog.Any(slog.SourceKey, src)); a.Key != "" {
+			// 	h.appendValue(buf, a.Value, false)
+			// 	buf.WriteByte(' ')
+			// }
 		}
 	}
 
