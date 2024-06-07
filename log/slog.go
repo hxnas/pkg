@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 	"unicode"
@@ -131,6 +130,45 @@ func GetPrefix(ctx context.Context) (prefix string) {
 	return
 }
 
+func (h *handler) resloveRecord(r *slog.Record) {
+	var sourceExist bool
+	r.Attrs(func(attr slog.Attr) bool {
+		if attr.Key == slog.TimeKey && attr.Value.Kind() == slog.KindTime {
+			r.Time = attr.Value.Time()
+		}
+
+		switch attr.Key {
+		case slog.TimeKey:
+			if attr.Value.Kind() == slog.KindTime {
+				if t := attr.Value.Time(); !t.IsZero() {
+					r.Time = attr.Value.Time()
+				}
+				attr.Value = slog.AnyValue(nil)
+			}
+			return !h.addSource
+		case slog.SourceKey:
+			sourceExist = true
+		}
+		return true
+	})
+
+	if !sourceExist && h.addSource && r.Level == slog.LevelDebug {
+		fs := runtime.CallersFrames([]uintptr{r.PC})
+		f, _ := fs.Next()
+		if f.File != "" {
+			dir, file := filepath.Split(f.File)
+			dir = filepath.Base(dir)
+			filename := filepath.Join(filepath.Base(dir), file)
+			src := &slog.Source{
+				Function: f.Function,
+				File:     filename,
+				Line:     f.Line,
+			}
+			r.AddAttrs(slog.Any(slog.SourceKey, src))
+		}
+	}
+}
+
 func (h *handler) Handle(ctx context.Context, r slog.Record) error {
 	// get a buffer from the sync pool
 	buf := newBuffer()
@@ -138,13 +176,7 @@ func (h *handler) Handle(ctx context.Context, r slog.Record) error {
 
 	rep := h.replaceAttr
 
-	r.Attrs(func(attr slog.Attr) bool {
-		if attr.Key == slog.TimeKey && attr.Value.Kind() == slog.KindTime {
-			r.Time = attr.Value.Time()
-			return false
-		}
-		return true
-	})
+	h.resloveRecord(&r)
 
 	// write time
 	if !r.Time.IsZero() {
@@ -169,42 +201,6 @@ func (h *handler) Handle(ctx context.Context, r slog.Record) error {
 	} else if a := rep(nil /* groups */, slog.Any(slog.LevelKey, r.Level)); a.Key != "" {
 		h.appendValue(buf, a.Value, false)
 		buf.WriteByte(' ')
-	}
-
-	// write source
-	if h.addSource && r.PC > 0 && r.Level == slog.LevelDebug {
-		fs := runtime.CallersFrames([]uintptr{r.PC})
-		f, _ := fs.Next()
-		if f.File != "" {
-
-			dir, file := filepath.Split(f.File)
-			dir = filepath.Base(dir)
-
-			const max = 15
-
-			filename := filepath.Join(filepath.Base(dir), file)
-			if l := len(filename); l > max {
-				filename = leftPad(file, max)
-			} else if l < max {
-				filename = leftPad(filename, max)
-			}
-
-			src := &slog.Source{
-				Function: f.Function,
-				File:     filename,
-				Line:     f.Line,
-			}
-
-			r.AddAttrs(slog.Any(slog.SourceKey, src))
-
-			// if rep == nil {
-			// 	h.appendSource(buf, src)
-			// 	buf.WriteByte(' ')
-			// } else if a := rep(nil /* groups */, slog.Any(slog.SourceKey, src)); a.Key != "" {
-			// 	h.appendValue(buf, a.Value, false)
-			// 	buf.WriteByte(' ')
-			// }
-		}
 	}
 
 	if prefix := GetPrefix(ctx); prefix != "" {
@@ -318,40 +314,45 @@ func appendLevelDelta(buf *buffer, delta slog.Level) {
 func (h *handler) appendSource(buf *buffer, src *slog.Source) {
 	dir, file := filepath.Split(src.File)
 	dir = filepath.Base(dir)
-
-	const max = 15
-
 	filename := filepath.Join(filepath.Base(dir), file)
-	if l := len(filename); l > max {
-		filename = leftPad(file, max)
-	} else if l < max {
-		filename = leftPad(filename, max)
-	}
 
 	buf.WriteStringIf(!h.noColor, ansiFaint)
 	buf.WriteString(filename)
 	buf.WriteByte(':')
-	buf.WriteString(rightPad(strconv.Itoa(src.Line), 3))
+	buf.WriteString(strconv.Itoa(src.Line))
 	buf.WriteStringIf(!h.noColor, ansiReset)
+
+	// const max = 15
+	// filename := filepath.Join(filepath.Base(dir), file)
+	// if l := len(filename); l > max {
+	// 	filename = leftPad(file, max)
+	// } else if l < max {
+	// 	filename = leftPad(filename, max)
+	// }
+	// buf.WriteStringIf(!h.noColor, ansiFaint)
+	// buf.WriteString(filename)
+	// buf.WriteByte(':')
+	// buf.WriteString(rightPad(strconv.Itoa(src.Line), 3))
+	// buf.WriteStringIf(!h.noColor, ansiReset)
 }
 
-func leftPad(s string, w int) string {
-	if l := len(s); l > w {
-		s = s[:w]
-	} else {
-		s = strings.Repeat(" ", w-l) + s
-	}
-	return s
-}
+// func leftPad(s string, w int) string {
+// 	if l := len(s); l > w {
+// 		s = s[:w]
+// 	} else {
+// 		s = strings.Repeat(" ", w-l) + s
+// 	}
+// 	return s
+// }
 
-func rightPad(s string, w int) string {
-	if l := len(s); l > w {
-		s = s[:w]
-	} else {
-		s = s + strings.Repeat(" ", w-l)
-	}
-	return s
-}
+// func rightPad(s string, w int) string {
+// 	if l := len(s); l > w {
+// 		s = s[:w]
+// 	} else {
+// 		s = s + strings.Repeat(" ", w-l)
+// 	}
+// 	return s
+// }
 
 func (h *handler) appendAttr(buf *buffer, attr slog.Attr, groupsPrefix string, groups []string) {
 	attr.Value = attr.Value.Resolve()
