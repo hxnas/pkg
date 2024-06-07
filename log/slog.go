@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -156,9 +157,10 @@ func (h *handler) resloveRecord(r *slog.Record) {
 		fs := runtime.CallersFrames([]uintptr{r.PC})
 		f, _ := fs.Next()
 		if f.File != "" {
-			dir, file := filepath.Split(f.File)
-			dir = filepath.Base(dir)
-			filename := filepath.Join(filepath.Base(dir), file)
+			f.File = filepath.ToSlash(f.File)
+			dir, file := path.Split(f.File)
+			dir = path.Base(dir)
+			filename := path.Join(path.Base(dir), file)
 			src := &slog.Source{
 				Function: f.Function,
 				File:     filename,
