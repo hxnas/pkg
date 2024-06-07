@@ -314,12 +314,8 @@ func appendLevelDelta(buf *buffer, delta slog.Level) {
 }
 
 func (h *handler) appendSource(buf *buffer, src *slog.Source) {
-	dir, file := filepath.Split(src.File)
-	dir = filepath.Base(dir)
-	filename := filepath.Join(filepath.Base(dir), file)
-
 	buf.WriteStringIf(!h.noColor, ansiFaint)
-	*buf = strconv.AppendQuote(*buf, filename+":"+strconv.Itoa(src.Line))
+	*buf = strconv.AppendQuote(*buf, src.File+":"+strconv.Itoa(src.Line))
 	buf.WriteStringIf(!h.noColor, ansiReset)
 }
 
