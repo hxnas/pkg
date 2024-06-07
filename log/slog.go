@@ -172,7 +172,7 @@ func (h *handler) Handle(ctx context.Context, r slog.Record) error {
 	}
 
 	// write source
-	if h.addSource {
+	if h.addSource && h.level == slog.LevelDebug {
 		fs := runtime.CallersFrames([]uintptr{r.PC})
 		f, _ := fs.Next()
 		if f.File != "" {
