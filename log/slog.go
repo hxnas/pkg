@@ -54,6 +54,8 @@ type Options struct {
 
 	// Disable color (Default: false)
 	NoColor bool
+
+	DebugSourceOnly bool
 }
 
 // NewHandler creates a [slog.Handler] that writes tinted logs to Writer w,
@@ -69,6 +71,8 @@ func NewHandler(w io.Writer, opts *Options) slog.Handler {
 	}
 
 	h.addSource = opts.AddSource
+	h.debugSourceOnly = opts.DebugSourceOnly
+
 	if opts.Level != nil {
 		h.level = opts.Level
 	}
@@ -93,24 +97,26 @@ type handler struct {
 	mu sync.Mutex
 	w  io.Writer
 
-	addSource   bool
-	level       slog.Leveler
-	replaceAttr func([]string, slog.Attr) slog.Attr
-	timeFormat  string
-	noColor     bool
+	debugSourceOnly bool
+	addSource       bool
+	level           slog.Leveler
+	replaceAttr     func([]string, slog.Attr) slog.Attr
+	timeFormat      string
+	noColor         bool
 }
 
 func (h *handler) clone() *handler {
 	return &handler{
-		attrsPrefix: h.attrsPrefix,
-		groupPrefix: h.groupPrefix,
-		groups:      h.groups,
-		w:           h.w,
-		addSource:   h.addSource,
-		level:       h.level,
-		replaceAttr: h.replaceAttr,
-		timeFormat:  h.timeFormat,
-		noColor:     h.noColor,
+		attrsPrefix:     h.attrsPrefix,
+		groupPrefix:     h.groupPrefix,
+		groups:          h.groups,
+		w:               h.w,
+		addSource:       h.addSource,
+		debugSourceOnly: h.debugSourceOnly,
+		level:           h.level,
+		replaceAttr:     h.replaceAttr,
+		timeFormat:      h.timeFormat,
+		noColor:         h.noColor,
 	}
 }
 
@@ -153,7 +159,7 @@ func (h *handler) resloveRecord(r *slog.Record) {
 		return true
 	})
 
-	if !sourceExist && h.addSource && r.Level == slog.LevelDebug {
+	if !sourceExist && h.addSource && (r.Level == slog.LevelDebug || !h.debugSourceOnly) {
 		fs := runtime.CallersFrames([]uintptr{r.PC})
 		f, _ := fs.Next()
 		if f.File != "" {

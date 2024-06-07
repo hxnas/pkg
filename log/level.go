@@ -21,6 +21,13 @@ func Level(logger *slog.Logger, level string) {
 	}
 }
 
+func AddSource(logger *slog.Logger, debugOnly bool) {
+	if h, ok := logger.Handler().(*handler); ok {
+		h.addSource = true
+		h.debugSourceOnly = debugOnly
+	}
+}
+
 // LevelFromString parse the level from string, ignore case
 //   - debug => slog.LevelDebug
 //   - info, information => slog.LevelInfo
@@ -55,4 +62,8 @@ func ForDefault(level string, addSource ...bool) {
 	}
 	// 设置默认日志记录器
 	slog.SetDefault(New(lOpt))
+}
+
+func SetDefault(opts *Options) {
+	slog.SetDefault(New(opts))
 }
