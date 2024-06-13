@@ -31,25 +31,19 @@ type ExtendType interface {
 // 参数:
 //   - parse: 一个函数，其输入为字符串，输出为 T 类型的值和可能的错误。用于将配置文件中的字符串值解析为实际的类型 T。
 //   - format: 一个函数，其输入为 T 类型的值，输出为字符串。用于将类型 T 的值格式化为字符串，以便写入配置文件中。
-func Extend[T any](parse func(string) (T, error), format func(T) string) {
-	// 定义一个 setFunc，用于设置值到反射的 Value 中
+func Extend[T any](parse func(string) (T, error), format func(T) string, typeString string) {
 	setFunc := func(v reflect.Value, s string) (err error) {
-		// 如果 parse 函数不为空，则尝试使用 parse 函数解析字符串
 		if parse != nil {
-			// 尝试解析字符串，成功则设置到反射的 Value 中
 			if r, e := parse(s); e == nil {
 				v.Set(reflect.ValueOf(r))
 			} else {
-				// 解析失败，返回错误
 				err = e
 			}
 		}
 		return
 	}
 
-	// 定义一个 getFunc，用于从反射的 Value 中获取值并格式化为字符串
 	getFunc := func(v reflect.Value) (s string) {
-		// 如果 format 函数不为空，则尝试使用 format 函数格式化值为字符串
 		if format != nil {
 			r, _ := v.Interface().(T)
 			s = format(r)
@@ -57,18 +51,16 @@ func Extend[T any](parse func(string) (T, error), format func(T) string) {
 		return
 	}
 
-	// 创建一个简单的类型，包含类型 T 的反射类型、设置函数和获取函数
 	var x T
-	st := &simpleType{typ: reflect.TypeOf(x), setFunc: setFunc, getFunc: getFunc}
+	typ := reflect.TypeOf(x)
 
-	// 将该简单类型注册到 extends 映射中，用于后续的类型-函数绑定
-	if extends == nil {
-		// 如果 extends 映射为空，则初始化一个新的映射并插入当前类型-函数绑定
-		extends = extendMap{st.typ: st}
-	} else {
-		// 如果 extends 映射已存在，则直接插入当前类型-函数绑定
-		extends[st.typ] = st
+	if typeString == "" {
+		typeString = rType(typ, true)
 	}
+
+	st := &simpleType{typ: typeString, setFunc: setFunc, getFunc: getFunc}
+
+	extends[typ] = st
 }
 
 // GetExtend 通过反射类型获取对应的扩展类型
@@ -92,7 +84,7 @@ func IsExtend(t reflect.Type) (yes bool) { _, yes = extends[t]; return }
 type extendMap map[reflect.Type]ExtendType
 
 type simpleType struct {
-	typ     reflect.Type
+	typ     string
 	setFunc func(reflect.Value, string) error
 	getFunc func(reflect.Value) string
 }
@@ -113,4 +105,4 @@ func (te *simpleType) Set(v reflect.Value, s string) (err error) {
 	return
 }
 
-func (te *simpleType) Type() string { return rType(te.typ, true) }
+func (te *simpleType) Type() string { return te.typ }

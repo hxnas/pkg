@@ -1,6 +1,7 @@
 package flags
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -8,120 +9,113 @@ import (
 	"unicode"
 )
 
-type flagField struct {
+type FlagField struct {
 	Field           reflect.StructField
 	Name            string
 	Shorthand       string
 	Usage           string
-	Value           *value
+	Value           *Value
 	Env             []string
 	Deprecated      string
 	ShortDeprecated string
 
-	Struct  reflect.Value
-	Referer reflect.Value
+	defTag string
 }
 
-func (f *flagField) UpdateFromEnv() {
-	printDeprecatedEnvKey := func(keys []string, ck, ak string, deprecated bool, i int) {
-		if deprecated {
-			if ak == "" && i < len(keys)-1 {
-				for _, ek := range keys {
-					if ek != "" && !strings.HasPrefix(ek, "*") {
-						ak = ek
-						break
-					}
-				}
-			}
-
-			if ak != "" {
-				fmt.Fprintf(os.Stderr, "[WARN] 环境变量参数[%s]已过期,请使用[%s]替代", ck, ak)
-			} else {
-				fmt.Fprintf(os.Stderr, "[WARN] 环境变量参数[%s]已过期", ck)
-			}
+func (f *FlagField) applyPrefix(prefix *Prefix) *FlagField {
+	if prefix != nil {
+		f.Name = prefix.Flag + f.Name
+		for i, env := range f.Env {
+			f.Env[i] = prefix.Env + env
 		}
 	}
-
-	checkDeprecated := func(in string) (key string, deprecated bool) {
-		if key, deprecated = in, strings.HasPrefix(in, "*"); deprecated {
-			key = key[1:]
-		}
-		return
-	}
-
-	var ak string
-	for i, k := range f.Env {
-		if ck, deprecated := checkDeprecated(k); ck != "" {
-			if !deprecated && ak == "" {
-				ak = ck
-			}
-			if ev := os.Getenv(ck); ev != "" {
-				if e := f.Value.SetDefault(ev); e == nil {
-					printDeprecatedEnvKey(f.Env, ck, ak, deprecated, i)
-					return
-				}
-			}
-		}
-	}
+	return f
 }
 
-func getFields(src any, checkSetable ...bool) (items []*flagField, err error) {
-	r := rVal(src, true)
+func (f *FlagField) applyDefault() (err error) {
+	for _, k := range f.Env {
+		if s := os.Getenv(strings.TrimSpace(k)); s != "" {
+			if f.defTag != "" {
+				f.Value.defs = o2s(f.defTag)
+			}
+			err = f.Value.SetString(o2s(s), true, true, false)
+			return
+		}
+	}
 
-	if len(checkSetable) > 0 && checkSetable[0] && !r.CanSet() {
+	if f.defTag != "" {
+		err = f.Value.SetString(o2s(f.defTag), true, true, true)
+	}
+	return
+}
+
+func ParseStruct(src any, prefix *Prefix) (fields []*FlagField, err error) {
+	r := Ref(src)
+
+	if !r.CanSet() {
 		err = fmt.Errorf("can't set %T", src)
 		return
 	}
 
+	prefix = sels(prefix, PrefixDefault)
+
 	for i, t := 0, r.Type(); i < t.NumField(); i++ {
 		f := t.Field(i)
-
 		if !f.IsExported() {
 			continue
 		}
 
-		if f.Anonymous {
-			children, e := getFields(r.Field(i), checkSetable...)
+		switch {
+		case isAllow(f.Type):
+			item, e := parseField(r, f, i)
 			if e != nil {
+				if e == ErrSkip {
+					continue
+				}
 				err = e
 				return
 			}
-			items = append(items, children...)
-			continue
-		}
+			fields = append(fields, item.applyPrefix(prefix))
+		case isStructType(f.Type):
+			var cFields []*FlagField
+			if f.Anonymous {
+				cFields, err = ParseStruct(mkPtr(r.Field(i)), prefix)
+			} else {
+				np, e := parseChildPrefix(f)
+				if e != nil {
+					if e == ErrSkip {
+						continue
+					}
+					err = e
+					return
+				}
 
-		if !isAllow(f.Type) {
-			return
-		}
+				np.Flag, np.Env = prefix.Flag+np.Flag, prefix.Env+np.Env
+				cFields, err = ParseStruct(mkPtr(r.Field(i)), np)
+			}
 
-		if item, ignored := parseField(r, f, i); !ignored {
-			items = append(items, &item)
+			if err != nil {
+				return
+			}
+
+			fields = append(fields, cFields...)
 		}
 	}
 
 	return
 }
 
-func parseField(r reflect.Value, f reflect.StructField, fieldIndex int) (item flagField, ignored bool) {
-	if flagTag := getTag(f.Tag, _TAG_FLAG); flagTag != "" {
-		if ignored = flagTag == "-"; ignored {
-			return
-		}
+var ErrSkip = errors.New("skip parse this field")
 
-		for _, s := range fieldSpilt(flagTag) {
-			switch {
-			case item.Name == "":
-				item.Name = s
-			case len(item.Name) == 1 && item.Shorthand == "":
-				item.Shorthand = item.Name
-				item.Name = s
-			case len(s) == 1 && item.Shorthand == "":
-				item.Shorthand = s
-			default:
-				item.Env = append(item.Env, s)
-			}
-		}
+func parseField(r reflect.Value, f reflect.StructField, fieldIndex int) (item FlagField, err error) {
+	if item.Name, item.Shorthand, item.Env, err = parseTag(f, false); err != nil {
+		return
 	}
+
+	item.Field = f
+	item.Value = newValue(r.Field(fieldIndex))
+	item.Usage = getTag(f.Tag, _TAG_USAGE)
+	item.defTag = getTag(f.Tag, _TAG_DEFAULT)
 
 	if deprecatedTag := getTag(f.Tag, _TAG_DEPRECATED); deprecatedTag != "" {
 		nn := fieldSpilt(deprecatedTag)
@@ -139,27 +133,77 @@ func parseField(r reflect.Value, f reflect.StructField, fieldIndex int) (item fl
 		}
 	}
 
+	return
+}
+
+func parseChildPrefix(f reflect.StructField) (*Prefix, error) {
+	name, _, envs, err := parseTag(f, true)
+	if err != nil {
+		return nil, err
+	}
+	if len(envs) == 0 {
+		envs = append(envs, strings.ToUpper(name))
+	}
+	return &Prefix{name + ".", envs[0] + "_"}, nil
+}
+
+func parseTag(f reflect.StructField, ignoreError bool) (name, shorthand string, envKeys []string, err error) {
+	if shorthand = getTag(f.Tag, _TAG_SHORTHAND); len(shorthand) > 0 {
+		if ignoreError {
+			shorthand = ""
+		} else {
+			err = fmt.Errorf("shorthand must be a single character, got: %s", shorthand)
+			return
+		}
+	}
+
 	if envTag := getTag(f.Tag, _TAG_ENV); envTag != "" && envTag != "-" {
-		item.Env = append(item.Env, fieldSpilt(envTag)...)
+		envKeys = append(envKeys, fieldSpilt(envTag)...)
 	}
 
-	if item.Name == "" {
-		item.Name = strings.ToLower(f.Name)
+	if flagTag := getTag(f.Tag, _TAG_FLAG); flagTag != "" {
+		if flagTag == "-" {
+			err = ErrSkip
+			return
+		}
+
+		for _, s := range fieldSpilt(flagTag) {
+			switch l := len(s); l {
+			case 0:
+				continue
+			case 1:
+				if shorthand != "" {
+					if ignoreError {
+						continue
+					}
+					err = fmt.Errorf("can only define one shorthand flag, got: %s, already: %s", s, shorthand)
+					return
+				}
+				shorthand = s
+			default:
+				if name == "" {
+					name = s
+				} else {
+					envKeys = append(envKeys, s)
+				}
+			}
+		}
 	}
 
-	item.Field = f
-	item.Struct = r
-	item.Referer = r.Field(fieldIndex)
-	item.Usage = getTag(f.Tag, _TAG_USAGE)
-	item.Value = newValue(item.Referer, f.Type)
+	if name == "" {
+		name = strings.ToLower(f.Name)
+	}
+
 	return
 }
 
 const (
 	_TAG_FLAG       = "flag"
+	_TAG_SHORTHAND  = "shorthand"
 	_TAG_DEPRECATED = "deprecated"
 	_TAG_ENV        = "env"
 	_TAG_USAGE      = "usage"
+	_TAG_DEFAULT    = "default"
 )
 
 var (

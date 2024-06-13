@@ -6,48 +6,53 @@ import (
 	"strconv"
 )
 
-func rVal(src any, indirect ...bool) reflect.Value {
-	r, ok := src.(reflect.Value)
-	if !ok {
-		r = reflect.ValueOf(src)
+func Ref(src any) reflect.Value {
+	if r, ok := src.(reflect.Value); ok {
+		return reflect.Indirect(r)
 	}
-	if len(indirect) > 0 && indirect[0] {
-		r = reflect.Indirect(r)
+
+	if v, ok := src.(*Value); ok {
+		return reflect.Indirect(v.Ref)
 	}
-	return r
+
+	return reflect.Indirect(reflect.ValueOf(src))
 }
 
-func rGets(v reflect.Value) (out []string) {
-	if !v.IsValid() || v.IsZero() {
+func rGet(v reflect.Value) (out []string) {
+	if IsZero(v) {
 		return
 	}
 
 	if te := GetExtend(v.Type()); te != nil {
-		return newSlice(te.Get(v))
+		return o2s(te.Get(v))
 	}
 
 	switch kind := v.Kind(); kind {
 	case reflect.Pointer:
-		out = rGets(v.Elem())
+		out = rGet(v.Elem())
 	case reflect.Slice:
 		for i := 0; i < v.Len(); i++ {
-			out = append(out, rGets(v.Index(i))...)
+			out = append(out, rGet(v.Index(i))...)
 		}
 	case reflect.String:
-		out = newSlice(v.String())
+		out = o2s(v.String())
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		out = newSlice(strconv.FormatInt(v.Int(), 10))
+		out = o2s(strconv.FormatInt(v.Int(), 10))
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		out = newSlice(strconv.FormatUint(v.Uint(), 10))
+		out = o2s(strconv.FormatUint(v.Uint(), 10))
 	case reflect.Float32, reflect.Float64:
-		out = newSlice(strconv.FormatFloat(v.Float(), 'f', -1, 64))
+		out = o2s(strconv.FormatFloat(v.Float(), 'f', -1, 64))
 	case reflect.Bool:
-		out = newSlice(strconv.FormatBool(v.Bool()))
+		out = o2s(strconv.FormatBool(v.Bool()))
 	}
 	return
 }
 
-func rSets(v reflect.Value, s string, reset ...bool) (err error) {
+func rSet(v reflect.Value, s string, reset bool) (err error) {
+	if !v.IsValid() {
+		return invalid("rSet")
+	}
+
 	if !v.CanSet() && v.Kind() != reflect.Pointer {
 		return fmt.Errorf("value can not set, kind=%s", v.Kind())
 	}
@@ -60,107 +65,76 @@ func rSets(v reflect.Value, s string, reset ...bool) (err error) {
 	case reflect.String:
 		v.SetString(s)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		err = rSetInt(v, s)
+		if r, e := strconv.ParseInt(s, 0, vBits(v)); e == nil {
+			v.SetInt(r)
+		} else {
+			err = e
+		}
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		err = rSetUint(v, s)
+		if r, e := strconv.ParseUint(s, 0, vBits(v)); e == nil {
+			v.SetUint(r)
+		} else {
+			err = e
+		}
 	case reflect.Float32, reflect.Float64:
-		err = rSetFloat(v, s)
+		if r, e := strconv.ParseFloat(s, vBits(v)); e == nil {
+			v.SetFloat(r)
+		} else {
+			err = e
+		}
 	case reflect.Bool:
-		err = rSetBool(v, s)
+		if r, e := strconv.ParseBool(s); e == nil {
+			v.SetBool(r)
+		} else {
+			err = e
+		}
 	case reflect.Pointer:
-		err = rSetPtr(v, s, len(reset) > 0 && reset[0])
+		err = rSet(mkPtr(v).Elem(), s, reset)
 	case reflect.Slice:
-		err = rSetSs(v, s, len(reset) > 0 && reset[0])
+		if reset {
+			v.Set(v.Slice(0, 0))
+		}
+
+		var el reflect.Value
+		if et := v.Type().Elem(); et.Kind() == reflect.Pointer {
+			el = reflect.New(et.Elem())
+		} else {
+			el = reflect.New(et).Elem()
+		}
+
+		if err = rSet(el, s, false); err != nil {
+			return
+		}
+
+		v.Set(reflect.Append(v, el))
 	default:
-		err = fmt.Errorf("unknown kind: %s", kind.String())
+		err = fmt.Errorf("unknown kind: %s", kind)
 	}
 
 	return
 }
 
-func rSetSs(v reflect.Value, s string, reset bool) (err error) {
-	if !v.IsValid() || v.Kind() != reflect.Slice {
-		return invalid("rSetSs")
-	}
-
-	if v.IsNil() {
-		v.Set(reflect.MakeSlice(v.Type(), 0, 0))
-	} else if reset {
-		v.Set(v.Slice(0, 0))
-	}
-
-	var el reflect.Value
-	if et := v.Type().Elem(); et.Kind() == reflect.Pointer {
-		el = reflect.New(et.Elem())
-	} else {
-		el = reflect.New(et).Elem()
-	}
-
-	if err = rSets(el, s, false); err != nil {
-		return
-	}
-
-	v.Set(reflect.Append(v, el))
-	return
+// IsZero reports whether v is the zero value for its type.
+//
+//	It return true if the argument is invalid.
+func IsZero(v reflect.Value) bool {
+	kind := v.Kind()
+	return kind == reflect.Invalid || v.IsZero()
 }
 
-func rSetPtr(v reflect.Value, s string, reset bool) (err error) {
-	if !v.IsValid() || v.Kind() != reflect.Pointer {
-		return invalid("rSetPtr")
+// IsNil reports whether its argument v is nil.
+//
+//	The argument must be a chan, func, interface, map, pointer or slice value, if it is not, return it is invalid.
+func IsNil(v reflect.Value) bool {
+	kind := v.Kind()
+	switch {
+	case kind == reflect.Invalid:
+		return true
+	case kind >= reflect.Chan && kind <= reflect.Slice:
+		return v.IsNil()
+	case kind == reflect.UnsafePointer:
+		return v.IsNil()
+	default:
+		return false
 	}
-
-	if v.IsNil() {
-		v.Set(reflect.New(v.Type().Elem()))
-	}
-	return rSets(v.Elem(), s, reset)
 }
-
-func rSetInt(v reflect.Value, s string) (err error) {
-	if !v.IsValid() || !isIntKind(v.Kind()) {
-		return invalid("rSetInt")
-	}
-	r, e := strconv.ParseInt(s, 0, bits(v.Type()))
-	if e == nil {
-		v.SetInt(r)
-	}
-	return e
-}
-
-func rSetUint(v reflect.Value, s string) (err error) {
-	if !v.IsValid() || !isUintKind(v.Kind()) {
-		return invalid("rSetUint")
-	}
-	r, e := strconv.ParseUint(s, 0, bits(v.Type()))
-	if e == nil {
-		v.SetUint(r)
-	}
-	return e
-}
-
-func rSetFloat(v reflect.Value, s string) (err error) {
-	if !v.IsValid() || !isFloatKind(v.Kind()) {
-		return invalid("rSetFloat")
-	}
-	r, e := strconv.ParseFloat(s, bits(v.Type()))
-	if e == nil {
-		v.SetFloat(r)
-	}
-	return e
-}
-
-func rSetBool(v reflect.Value, s string) (err error) {
-	if !v.IsValid() || v.Kind() != reflect.Bool {
-		return invalid("rSetBool")
-	}
-	r, e := strconv.ParseBool(s)
-	if e == nil {
-		v.SetBool(r)
-	}
-	return e
-}
-
-func invalid(method string) error {
-	return &reflect.ValueError{Method: method, Kind: reflect.Invalid}
-}
-
-func newSlice[T any](n ...T) []T { return n }

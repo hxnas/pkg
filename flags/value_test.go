@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -14,9 +15,9 @@ var FmtPrintln = func(s string) { fmt.Println("  --" + s) }
 var FmtPrintf = func(s string, args ...any) { fmt.Printf(s+"\n", args...) }
 
 type TestStruct struct {
-	Str      string   `flag:"str,STR"`
-	Strs     []string `flag:"strs,YES,s"`
-	Int64p   *int64
+	Str      string   `flag:"str,STR" default:"hello"`
+	Strs     []string //`flag:"strs,YES,s" default:"strssss"`
+	Int64p   *int64   `env:"INT64P" flag:"i" default:"234"`
 	Durpsp   *[]*time.Duration
 	Durps    []*time.Duration
 	Durs     []time.Duration
@@ -30,51 +31,55 @@ type TestStruct struct {
 }
 
 func TestFlag(t *testing.T) {
-	Version("1.0.0")
+	Default.SetVersion("1.0.0")
 	time.Local = time.FixedZone("CST", 8*3600)
 
-	os.Setenv("STR", ":9981")
-	os.Args = []string{
-		os.Args[0],
-		"--str", "a",
-		"--str", "b",
-		"--strs", "b", "--strs", "c",
-		"--int64p", "13",
-		"--durpsp", "1s", "--durpsp", "1h", "--durpsp", "1d",
-		"--durps", "1s", "--durps", "1h", "--durps", "1d",
-		// "--durs", "1s", "--durs", "1h",
-		// "--durs", "1d",
-		"--int64s", "1", "--int64s", "2", "--int64s", "3",
-		"--uint64ps", "1", "--uint64ps", "2", "--uint64ps", "3",
-		"--uintsp", "1", "--uintsp", "2", "--uintsp", "3",
-		"--time", "2021-01-01",
-		"--times", "2021-01-01", "--times", "2021-01-02", "--times", "2021-01-03 11:12",
-		"--timep", "2022/01/01 11:12",
-		"--hello",
-		// "-h",
+	args := []string{
+		"--str", "a", "--str", "b",
+		"--strs", "c", "--strs", "d",
+		// "--int64p", "13",
+		// "--durpsp", "1s", "--durpsp", "1h", "--durpsp", "1d",
+		// "--durps", "1s", "--durps", "1h", "--durps", "1d",
+		// "--int64s", "1", "--int64s", "2", "--int64s", "3",
+		// "--uint64ps", "4", "--uint64ps", "5", "--uint64ps", "6",
+		// "--uintsp", "7", "--uintsp", "8", "--uintsp", "9",
+		// "--time", "2020-01-01",
+		// "--times", "2021-01-01", "--times", "2021-01-02", "--times", "2021-01-03 11:12",
+		// "--timep", "2022/01/01 11:12",
+		// "--hello",
+		"-h",
 	}
 
 	var cfg TestStruct
+	os.Setenv("STR", ":9981")
+	os.Setenv("INT64P", "9982")
+	cfg.Time = time.Now()
 
 	cfg.Durs = []time.Duration{1 * time.Second, 1 * time.Hour}
+	flag := New("test")
+	flag.Struct(&cfg, nil)
 
-	if err := StructBindE(&cfg); err != nil {
+	if err := flag.Parse(args); err != nil {
 		t.Fatal(err)
 	}
 
-	Parse()
+	FieldsWalk(&cfg, nil, func(field *FlagField, max int) {
+		FmtPrintln(fmt.Sprintf("%-*s | %s", max, field.Name, strings.Join(rGet(field.Value.Ref), ", ")))
+	})
 
-	StructPrint(cfg, FmtPrintln)
-	args := StructToArgs(cfg)
-
-	fmt.Printf("args:  \"%s\"\n", strings.Join(args, `", "`))
+	fmt.Println("args:")
+	args, err := FieldsToArgs(&cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Printf(`"%s"`+"\n", strings.Join(args, `", "`))
 }
 
 const FMT = "| %-15s | %-17s | %-5s | %-5s | %-5s | %-5s | %-5s | %-5s |"
 
 func TestReflectStruct(t *testing.T) {
 	s := TestStruct{Times: []time.Time{time.Now()}, Str: "1", Int64s: []int64{}}
-	sv := rVal(&s)
+	sv := Ref(&s)
 	st := sv.Type().Elem()
 	sv = sv.Elem()
 
@@ -102,24 +107,34 @@ func TestValue(t *testing.T) {
 		vIntPsP   *[]*int
 	)
 
-	rSets(rVal(&vDuration), "24d1h2s")
-	rSets(rVal(&vInt64), "100")
-	rSets(rVal(&vInt), "101")
-	rSets(rVal(&vIntP), "102")
-	rSets(rVal(&vInts), "103")
-	rSets(rVal(&vInts), "104")
-	rSets(rVal(&vIntsP), "105")
-	rSets(rVal(&vIntsP), "106")
+	rSet(Ref(&vDuration), "24d1h2s", false)
+	rSet(Ref(&vInt64), "100", false)
+	rSet(Ref(&vInt), "101", false)
+	rSet(Ref(&vIntP), "102", false)
+	rSet(Ref(&vInts), "103", false)
+	rSet(Ref(&vInts), "104", false)
+	rSet(Ref(&vIntsP), "105", false)
+	rSet(Ref(&vIntsP), "106", false)
 
-	metaPrint("conf", rVal(&conf), nil)
-	metaPrint("vDuration", rVal(&vDuration), nil)
-	metaPrint("vInt64", rVal(&vInt64), nil)
-	metaPrint("vInt", rVal(&vInt), nil)
-	metaPrint("vIntP", rVal(&vIntP), nil)
-	metaPrint("vInts", rVal(&vInts), nil)
-	metaPrint("vIntsP", rVal(&vIntsP), nil)
-	metaPrint("vIntPs", rVal(&vIntPs), nil)
-	metaPrint("vIntPsP", rVal(&vIntPsP), nil)
+	metaPrint("conf", Ref(&conf), nil)
+	metaPrint("vDuration", Ref(&vDuration), nil)
+	metaPrint("vInt64", Ref(&vInt64), nil)
+	metaPrint("vInt", Ref(&vInt), nil)
+	metaPrint("vIntP", Ref(&vIntP), nil)
+	metaPrint("vInts", Ref(&vInts), nil)
+	metaPrint("vIntsP", Ref(&vIntsP), nil)
+	metaPrint("vIntPs", Ref(&vIntPs), nil)
+	metaPrint("vIntPsP", Ref(&vIntPsP), nil)
+}
+
+func TestQueued(t *testing.T) {
+	var s struct {
+		Durations []time.Duration `flag:"vDuration" usage:"vDuration" default:"13s,16s"`
+	}
+	var _ = s
+	// t.Log(strconv.Unquote(`"'vDuration','1234'"`))
+	// var sf reflect.StructTag
+	t.Log(strconv.UnquoteChar(`'vDuration'`, '\''))
 }
 
 func metaPrinter(printf func(string, ...any)) func(name string, rv reflect.Value, rt reflect.Type) {
@@ -163,7 +178,7 @@ func metaPrinter(printf func(string, ...any)) func(name string, rv reflect.Value
 			sBool(isNil(rv)),
 			len(headers[7]),
 			sBool(rv.IsZero()),
-			rGets(rv),
+			rGet(rv),
 		)
 	}
 }

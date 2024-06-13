@@ -59,32 +59,14 @@ func bits(t reflect.Type) (bitsize int) {
 	return
 }
 
+func vBits(v reflect.Value) (bitsize int) { return bits(v.Type()) }
+
 func isBasicKind(kind reflect.Kind) bool {
-	switch kind {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return true
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return true
-	case reflect.Float32, reflect.Float64:
-		return true
-	case reflect.String, reflect.Bool:
-		return true
-	default:
-		return false
-	}
+	return kind == reflect.String || kind == reflect.Bool || isNumKind(kind)
 }
 
 func isNumKind(kind reflect.Kind) bool {
-	switch kind {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return true
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return true
-	case reflect.Float32, reflect.Float64:
-		return true
-	default:
-		return false
-	}
+	return isIntKind(kind) || isUintKind(kind) || isFloatKind(kind)
 }
 
 func isIntKind(kind reflect.Kind) bool {
@@ -112,4 +94,13 @@ func isFloatKind(kind reflect.Kind) bool {
 	default:
 		return false
 	}
+}
+
+func isStructType(t reflect.Type) bool { return typeIndirect(t).Kind() == reflect.Struct }
+
+func typeIndirect(t reflect.Type) reflect.Type {
+	if t.Kind() == reflect.Ptr {
+		return t.Elem()
+	}
+	return t
 }
